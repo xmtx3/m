@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/4.5.0/css/bootstrap.min.css">
+  <title>2026马钞靓号检测系统</title>
+  <style>
+    :root { --main-red: #d32f2f; --bg-gray: #f8f9fa; }
+    body { background-color: var(--bg-gray); color: #333; font-family: -apple-system, sans-serif; }
+    .container { max-width: 600px; padding-bottom: 40px; }
+    .header-box { background: linear-gradient(135deg, #e74c3c 0%, var(--main-red) 100%); color: white; padding: 30px 15px; border-radius: 0 0 30px 30px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(211, 47, 47, 0.3); }
+    .card { border: none; border-radius: 20px; box-shadow: 0 8px 25px rgba(0,0,0,0.05); }
+    .btn-start { background-color: var(--main-red); border: none; font-weight: bold; padding: 14px; font-size: 1.1rem; border-radius: 12px; }
+    .btn-start:active { transform: scale(0.97); }
+    .table-responsive { border-radius: 15px; background: white; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+    #data thead th { border-top: none; background: #fafafa; color: #888; font-size: 0.75rem; text-transform: uppercase; }
+    .badge-luck { background-color: #fff1f0; color: var(--main-red); border: 1px solid #ffa39e; margin: 2px; display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 500; }
+    .num-text { font-family: "Monaco", "Consolas", monospace; font-weight: 700; color: #1a1a1a; letter-spacing: 0.5px; }
+    .table-warning { background-color: #fffbe6 !important; }
+  </style>
+</head>
+<body>
+
+<div class="header-box text-center">
+  <h2 class="mb-1">🐴 2026马钞靓号检测</h2>
+  <p class="mb-0 opacity-75 small">专业级钱币收藏智能分析系统</p>
+</div>
+
+<div class="container">
+  <div class="card p-4">
+    <div class="form-group">
+      <label class="small text-muted font-weight-bold">首钞票号 (9位数字)</label>
+      <div class="input-group">
+        <div class="input-group-prepend">
+          <span class="input-group-text bg-light font-weight-bold text-danger">J</span>
+        </div>
+        <input type="number" pattern="\d*" class="form-control form-control-lg" id="cpnum" placeholder="输入9位数字，如 001234567" autocomplete="off">
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label class="small text-muted font-weight-bold">检测规模</label>
+      <select class="form-control form-control-lg" id="num">
+        <option value="1">单张检测</option>
+        <option value="10">十连 (整推)</option>
+        <option value="20">二十连</option>
+        <option value="100">百连 (整刀)</option>
+      </select>
+    </div>
+
+    <button type="button" class="btn btn-danger btn-block btn-start" onclick="start()">开启智能识别</button>
+    <button type="button" class="btn btn-link btn-block btn-sm text-muted mt-2" onclick="toExcel()">导出 Excel 数据</button>
+  </div>
+
+  <div class="mt-4" id="resultArea" style="display: none;">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" id="data">
+        <thead class="text-center">
+          <tr>
+            <th width="15%">序号</th>
+            <th width="35%">票号</th>
+            <th>特征标签</th>
+          </tr>
+        </thead>
+        <tbody class="text-center"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<footer class="text-center mt-4">
+  <p class="text-muted small">© 2026 马钞靓号检测系统 v3.5<br>作者dy：小茗同学</p>
+</footer>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.5.0/jquery.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/layer/3.5.1/layer.min.js"></script>
+
+<script>
+  /**
+   * 算法核心：多维度靓号识别
+   */
+  function checkNum(e) {
+    let n = [];
+    
+    // 1. 无47 规则：前6位无4或7 (不计后3位)
+    if (!/[47]/.test(e.substring(0, 6))) n.push("无47");
+    
+    // 2. 无347 规则：前7位无3、4或7 (不计后2位)
+    if (!/[347]/.test(e.substring(0, 7))) n.push("无347");
+
+    // 3. 马年生日号 (匹配马年：1966, 1978, 1990, 2002, 2014, 2026)
+    const horseYears = "1966|1978|1990|2002|2014|2026";
+    const birthRegex = new RegExp(`^(?:${horseYears})(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])$`);
+    if (e.slice(-8).match(birthRegex)) {
+      n.push("马年生日号");
+    }
+
+    // 4. 叠号检测 (豹子、狮子、老虎、通天号)
+    const repeatMatch = e.match(/(\d)\1{2,}$/);
+    if (repeatMatch) {
+      const len = repeatMatch[0].length;
+      const names = {3:"豹子", 4:"狮子", 5:"老虎", 6:"大象", 7:"恐龙", 8:"麒麟", 9:"通天"};
+      if(names[len]) n.push(names[len] + "号");
+    }
+
+    // 5. 顺子检测 (五位及以上顺子)
+    if (/(01234|12345|23456|34567|45678|56789)/.test(e)) n.push("顺子号");
+
+    // 6. 雷达号 (正反读一致)
+    if (e === e.split("").reverse().join("")) n.push("雷达号");
+    
+    // 7. 倒置号 (由0,1,6,8,9组成) - 市场热门
+    if (/^[01689]+$/.test(e)) n.push("倒置号");
+
+    // 8. 2026 纪念号
+    if (e.includes("2026")) n.push("2026号");
+
+    // 9. 马数特征 (全号由几种数字组成)
+    const sz = new Set(e).size;
+    if (sz <= 3) n.push("马" + (sz === 2 ? "二" : "三"));
+
+    return n.length > 0 ? n : ["普通"];
+  }
+
+  function start() {
+    const rawVal = $('#cpnum').val().trim();
+    
+    // 漏洞防护：校验长度与纯数字
+    if (rawVal.length !== 9 || !/^\d+$/.test(rawVal)) {
+      layer.msg("请输入9位数字起始票号", {anim: 6});
+      return;
+    }
+
+    const tab = $('#data tbody');
+    tab.empty();
+    const count = parseInt($('#num').val());
+    
+    // 使用 BigInt 解决 JS 整数精度溢出漏洞
+    const startNum = BigInt(rawVal);
+
+    let htmlBuffer = '';
+    for (let i = 0; i < count; i++) {
+      let currentStr = (startNum + BigInt(i)).toString().padStart(9, "0");
+      let traits = checkNum(currentStr);
+      
+      let tags = traits.map(f => `<span class="badge-luck">${f}</span>`).join('');
+      let isSpecial = !(traits.length === 1 && traits[0] === "普通");
+      let rowClass = isSpecial ? "table-warning" : "";
+
+      htmlBuffer += `<tr class="${rowClass}">
+        <td class="small text-muted">${i + 1}</td>
+        <td class="num-text">J${currentStr}</td>
+        <td class="text-left">${tags}</td>
+      </tr>`;
+    }
+    
+    tab.append(htmlBuffer);
+    $('#resultArea').show();
+    layer.msg("识别成功");
+    
+    // 移动端平滑滚动至结果区
+    if (count > 1) {
+      $('html, body').animate({ scrollTop: $("#resultArea").offset().top - 20 }, 500);
+    }
+  }
+
+  function toExcel() {
+    const table = document.getElementById("data");
+    if (table.rows.length <= 1) {
+      layer.msg("请先进行检测");
+      return;
+    }
+    const blobHtml = `<html><head><meta charset='utf-8'></head><body>${table.outerHTML}</body></html>`;
+    const blob = new Blob([blobHtml], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `马钞检测_${new Date().getTime()}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+</script>
+</body>
+</html>
